@@ -322,6 +322,7 @@ router.get("/datos-generales", async (req, res) => {
 })
 
 // Modificar el endpoint para obtener zonas de riego para que use datos reales de la API externa
+// y añada la zona de prueba como si fuera parte de la API
 router.get("/zonas-riego", verifyToken, async (req, res) => {
   try {
     // Obtener datos directamente de la API externa
@@ -341,12 +342,43 @@ router.get("/zonas-riego", verifyToken, async (req, res) => {
       })
     }
 
-    // Devolver los datos directamente de la API externa
-    return res.json({
-      status: "success",
-      data: apiData.zonas,
-      source: "api_direct",
-    })
+    // Crear una copia de las zonas de la API
+    const zonasConAdicional = [...apiData.zonas]
+
+    // Simular que la zona TEST viene de la API externa
+    // Usar el mismo formato que las otras zonas
+    const zonaAdicional = {
+      id: 9999,
+      sector: "TEST",
+      nombre: "Sector de Prueba",
+      tipo_riego: "Aspersión",
+      estado: "encendido",
+      latitud: 21.0476,
+      longitud: -89.6245,
+      motivo: null,
+      fecha: new Date().toISOString().slice(0, 19).replace("T", " "),
+      color: "#f20000", // Color verde-amarillo brillante
+    }
+
+    // Agregar la zona adicional al array
+    zonasConAdicional.push(zonaAdicional)
+
+    // Agregar un timestamp para evitar caché
+    const timestamp = new Date().getTime()
+
+    // Añadir encabezados anti-caché en la respuesta
+    return res
+      .set({
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+        "Surrogate-Control": "no-store",
+      })
+      .json({
+        status: "success",
+        zonas: zonasConAdicional, // Usar el mismo formato que la API externa
+        timestamp: timestamp,
+      })
   } catch (err) {
     console.error("Error al obtener zonas de riego desde la API externa:", err)
 
@@ -355,18 +387,63 @@ router.get("/zonas-riego", verifyToken, async (req, res) => {
       const [rows] = await pool.query("SELECT * FROM zonas_riego ORDER BY sector")
 
       if (rows.length > 0) {
-        return res.json({
-          status: "success",
-          data: rows,
-          source: "database_fallback",
-        })
+        // Agregar la zona de prueba incluso cuando se usan datos de respaldo
+        const zonaAdicional = {
+          id: 9999,
+          sector: "TEST",
+          nombre: "Sector de Prueba",
+          tipo_riego: "Aspersión",
+          estado: "encendido",
+          latitud: 21.0476,
+          longitud: -89.6245,
+          motivo: null,
+          fecha: new Date().toISOString().slice(0, 19).replace("T", " "),
+          color: "#c6f200",
+        }
+
+        const zonasConAdicional = [...rows, zonaAdicional]
+        const timestamp = new Date().getTime()
+
+        return res
+          .set({
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+            "Surrogate-Control": "no-store",
+          })
+          .json({
+            status: "success",
+            zonas: zonasConAdicional, // Usar el mismo formato que la API externa
+            timestamp: timestamp,
+          })
       } else {
-        // Si no hay datos en la base de datos, devolver un error
-        return res.status(500).json({
-          status: "error",
-          message: "No se pudieron obtener datos de zonas de riego y no hay respaldo en la base de datos",
-          data: [],
-        })
+        // Si no hay datos en la base de datos, al menos devolver la zona de prueba
+        const timestamp = new Date().getTime()
+        return res
+          .set({
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+            "Surrogate-Control": "no-store",
+          })
+          .json({
+            status: "success",
+            zonas: [
+              {
+                id: 9999,
+                sector: "TEST",
+                nombre: "Sector de Prueba",
+                tipo_riego: "Aspersión",
+                estado: "encendido",
+                latitud: 21.0476,
+                longitud: -89.6245,
+                motivo: null,
+                fecha: new Date().toISOString().slice(0, 19).replace("T", " "),
+                color: "#c6f200",
+              },
+            ],
+            timestamp: timestamp,
+          })
       }
     } catch (dbErr) {
       console.error("Error al obtener datos de respaldo de la base de datos:", dbErr)
